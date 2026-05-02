@@ -14,7 +14,7 @@ Short description of the content:
     The following files have code for estimating signature size and the concrete bit securities
     * cli_que_estim.py: client query size and security estimator
     * iss_tok_estim.py: issuer pretoken size and security estimator 
-    * cliq_obt_estim.py: final token size and security estimator
+    * cli_obt_estim.py: final token size and security estimator
 
 - Experiments
 To generate the various estimates run

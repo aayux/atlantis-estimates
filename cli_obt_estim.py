@@ -16,6 +16,7 @@ from MLWE_security import MLWE_optimize_attack, LWE_primal_cost, LWE_dual_cost
 from model_BKZ import svp_classical
 from math import sqrt, floor, ceil, log, exp
 from estimator_ntru import combined_attack_prob
+from one_more_sis_security import combinatorial, lattice_attack
 
 pi = 3.1415926535897932384626433832795028841971693993751058209749
 
@@ -225,7 +226,7 @@ print('beta:', beta)
 # and we keep the same q_PKE
 # what we can play with is the size of x1, x2
 #####################
-tau_x = 10 #ell_oo norm of u1, u2
+tau_x = 8 #ell_oo norm of u1, u2
 
 #####################
 # Encryption Parameters
@@ -299,7 +300,6 @@ print(' ------------------ ZK proof  area  ------------------ ' )
 
 # below is its norm, which is hopefully not too large compared to beta
 extracted_beta = sqrt(beta**2 + tau_x**4 * n_F*n_F*2*2+ tau_x**2 * n_F*2)
-
 ve = 4 # number of norm equations
 vd = 0 # number of inf-norm equations
 norm_x = sqrt(ve)*sqrt(d)
@@ -404,3 +404,13 @@ lwe_sec = LWE_security(cli_obt)
 print('LWE hardness primal:', lwe_sec)
 #lwe_sec_dual = LWE_security(cli_obt, attack=LWE_dual_cost)
 #print('LWE hardness dual:', lwe_sec_dual)
+
+#####################
+# One-more-SIS security [AKSY22 Section 4.5]
+# dimensions of the one-more-SIS problem are those of Falcon
+######################
+res_combinatorial = combinatorial(n_F, n_F, beta, q_F, extracted_beta)
+print('combinatorial attack on one-more-SIS with beta-bound', extracted_beta, ': ', res_combinatorial)
+
+res_lattices = lattice_attack(n_F, n_F, q_F, extracted_beta)
+print('lattice attack on  one-more-SIS with beta-bound', extracted_beta, ': ', res_lattices)
