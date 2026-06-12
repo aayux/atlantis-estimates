@@ -15,7 +15,6 @@ from MSIS_security import SIS_optimize_attack, SIS_l2_cost, SIS_linf_cost
 from MLWE_security import MLWE_optimize_attack, LWE_primal_cost, LWE_dual_cost
 from model_BKZ import svp_classical
 from math import sqrt, floor, ceil, log, exp
-from estimator_ntru import combined_attack_prob
 
 pi = 3.1415926535897932384626433832795028841971693993751058209749
 
@@ -189,145 +188,11 @@ def proof_size(paramset):
 # Adapted from 1st parameter set of the Falcon NIST submission
 # Available at: https://falcon-sign.info/falcon.pdf
 #####################
-print(' ------------------ Falcons  signature area  ------------------ ' )
+print(' ------------------ Commitment area  ------------------ ' )
 
 d   = 128
 sec = 128
-n_F = 512
-q_F = 7213
-# This is not the modulus chosen by Falcon. We chose the smallest modulus that satisfies:
-# (1) q_F mod 8 = 5 -> x^128+1 splits into two nice factors (see Lemma 2.5 in LNP)
-# (2) q_F > 2^{128/lmbda}
-# the smallness of q_F makes beta_inf small, hence milder lower bound on q_ZK later
+n_F = 256
+q_F = 1180591620717411303613
 
-
-epsinv = sqrt(sec*2**64)# R\'enyi divergence stuff, see above (2.13) in Falcon doc
-#epsinv = 2**sec # stat. distance
-sigma_F = (1/pi)*sqrt(log(4*n_F*(1+epsinv))/2)*1.17*sqrt(q_F)
-print('sigma_F:', sigma_F)
-# (2.13) in Falcon doc
-beta = sigma_F*1.1*sqrt(2*n_F)
-# (2.14) in Falcon doc, l2-norm of the signature
-beta_inf = ceil(sigma_F*4.15)
-# l2-inf norm bound of the sig, see [Le. 2.2, LNP22] with md=1.
-# we chose that as large as possible to make the lower bound on encryption q_PKE to be as close to our q_PKE as possible
-# Probability that a signature has the appropriate norm
-# Maple code: t := 4.15: n:=512: (1-t*exp((-t^2 + 1)/2))^(n);
-# Maple answer is 0.528
-
-print('beta_inf:', beta_inf)
-print('beta:', beta)
-
-#Falcon's hardness (use the NTRU hardness estimator)
-sigma_fg = 1.17*sqrt(q_F/(2*n_F)) # see Alg.5 in https://falcon-sign.info/falcon.pdf
-print('sigma_fg:', sigma_fg)
-beta_ntru_skr = combined_attack_prob(q_F, n_F, sigma_fg*sigma_fg, "circulant", 8, "SKR", verbose=False)
-print(beta_ntru_skr[0], beta_ntru_skr[1])
-print('Falcons secret key security as NTRU:', svp_classical(beta_ntru_skr[1]))
-
-signature_key_primal = MLWE_optimize_attack(q_F, n_F, n_F, sigma_fg, cost_attack=LWE_primal_cost, cost_svp=svp_classical, verbose=False)
-print('Falcons secret key security as LWE:', signature_key_primal)
-
-# commented out because it takes quite some time and the attack is worse than primal
-#forgery_primal = SIS_optimize_attack(q_F, 2*n_F, n_F, beta_inf, cost_attack=SIS_linf_cost, cost_svp=svp_classical, verbose=False)
-#print('Falcons forgery as SIS in ell_infinity:', forgery_primal)
-
-# returns 0 bits of security when beta>q_F
-forgery_primal_ell2 = SIS_optimize_attack(q_F, 2*n_F, n_F, beta, cost_attack=SIS_l2_cost, cost_svp=svp_classical, verbose=False)
-print('Falcons forgery as SIS in ell_2:', forgery_primal_ell2)
-
-#####################
-# ZK proof    (see LNP22, Fig. 10)
-#####################
-
-print(' ------------------ ZK proof  area  ------------------ ' )
-
-# prove b, r are binary
-ve = 2 # number of norm equations as proxy for proving (b * (b - 1) = 0 and r * (r - 1) = 0))
-vd = 0 # number of inf-norm equations
-
-norm_szk = q_F
-# norm of the norm vector s^(e)
-alpha_e = q_F
-print('alpha_e:', alpha_e)
-
-gamma_e = 3
-t       = 1.64
-kappa   = 2
-Be = 2*sqrt(256/26)*t*gamma_e*sqrt(337)*(alpha_e) # as per Thm. 5.3
-ce = d*(round(7*n_F/d)+1) # Fig 10
-lb1 = floor(Be*41*ce)+1                      # Thm. 5.3
-lb2 = floor(Be**2+sqrt(ve*d)*Be)+1           # Thm. 5.3
-lb3 = floor(Be**2+2)  # Thm. 5.3
-lb = max(lb1, lb2, lb3)
-
-
-print(2*sqrt(256/26)*t*gamma_e*sqrt(337))
-print('ce:', ce, 'log(Be):', log(Be,2))
-print()
-print('lb1:', log(lb1,2), 'lb2:', log(lb2,2), 'lb3:',log(lb3,2))
-
-# q_ZK = q_PKE * q3  = q_F * q1 * q3
-# We want
-# (0) q3 prime
-# (1) q3 >= q1 (q1=q_F should remain the smallest factor of q_ZK)
-# (2) q_ZK>= lb
-# (3) (x^d+1) has two factors mod q_ZK
-
-q2 = 2317417901 #chosen as next prime to ceil(lb/q) such that it is congruent to 5 mod 8
-# Maple code: q3 := 124781: d:=128: l := numelems((Factors(x^d + 1) mod q3)[2]): isprime(q1), l;
-# Maple answer is "true, 2"
-q_ZK = q_F*q2
-assert(q_ZK>=lb)
-print('q3:', q2)
-print('log(q_ZK):', log(q_ZK,2), 'q_ZK:', q_ZK)
-
-l = 2 # number of factors of (x^128+1) mod q1
-
-#summary of all the params
-#  We are somewhat free to choose n and m2
-#  For MLWE to make sense we require m2>n+{0,1,2}*(256/d+1)+lamb/2+ell,
-
-gamma_candidate = 2**24
-D_candidate = floor(log(gamma_candidate / (kappa*d), 2) + 1) # as per LNP22 (paragraph Dilithium compression)
-print('D:', D_candidate)
-iss_tok = {'d': 128, #ring dimension
-              'n': 11, # determines SIS hardness
-              'm1': 4, # m1
-              'm2': 34, # m2 - n+{0,1,2}*(256/d+1)+lamb/2+ell determines LWE hardness
-              'q': q_ZK, # ZK modulus
-              'lambda': 10,
-             'nu': 1,  # taken from LNP22
-             'eta': 59, # taken from LNP22
-             'gamma1': 10, # influences the repetition factor
-             'gamma2': 1.5,  # influences the repetition factor
-             'gammae': 5,  # influences the repetition factor
-             'alphae':(alpha_e)**2, # norm of the norm vector s^(e) = [y1| y2 | x1 | x2 | s | e1 | e2 | x)
-             'norm_s1': norm_szk**2, # norm of the zk secret
-             'ell': 0,
-             've': 3,  # number of exact norm proofs
-             'vd': 0,  # number of approxumate norm proofs
-             'D': D_candidate, # cutting D low-order bits from t_A
-             'gamma': gamma_candidate # cutting log_gamma bits from w
-             }
-scalar = 1 #scalar is the number from the set {0,1,2} (see formula above) that depends on the number ve and vd
-assert(iss_tok['m2']>iss_tok['n']+scalar*(256/d+1)+iss_tok['lambda']/2+iss_tok['ell']+2)
-
-# sizes
-proof = proof_size(iss_tok)
-print('proof size:', proof)
-#print('overall BG-optimized:', (ct_size+proof[1]))
-#print('overall BG-optimized+CUT:', (ct_size+proof[3]))
-
-# number of repetitions (rejection sampling)
-# See [LNP22] Section 6.2  (12 is erroneous and should be 14)
-reps = 2*exp(14/iss_tok['gamma1'] + 1/(2*iss_tok['gamma1']**2) + 1/(2*iss_tok['gamma2']**2) + 1/(2*iss_tok['gammae']**2))
-print('avg nbr of repeats:', reps)
-
-# security
-sis_sec = SIS_security(iss_tok)
-print('SIS hardness:', sis_sec)
-lwe_sec = LWE_security(iss_tok)
-print('LWE hardness primal:', lwe_sec)
-#lwe_sec_dual = LWE_security(iss_tok, attack=LWE_dual_cost)
-#print('LWE hardness dual:', lwe_sec_dual)
+print('Query size: ', 3 * 256 * log(q_F, 2) / (8 * 1024))
